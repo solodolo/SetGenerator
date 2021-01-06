@@ -6,18 +6,21 @@
 
 class LR1Item {
   public:
-    LR1Item() : position(0) {};
+    LR1Item(std::string production, std::string lookahead, int position) :
+      production(production),
+      lookahead(lookahead),
+      position(position) {};
 
   private:
     // Production without lookahead like S -> E
     std::string production;
 
+    // Terminal lookahead 
+    std::string lookahead;
+
     // The current position of the marker
     // E.g. when production = S -> E and position = 0 then LR item =  S -> . E
     int position;
-
-    // Terminal lookahead 
-    std::string lookahead;
 };
 
 class SetGenerator {
