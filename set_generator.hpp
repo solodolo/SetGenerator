@@ -173,6 +173,7 @@ class SetGenerator {
 
             // if GOTO(I,X) not empty and not in C
             // add GOTO(I,X) to C
+            // TODO : Optimize by passing kernel set to build_goto to avoid calculating it twice
             std::unordered_set<LR1Item, LR1ItemHash> gotos = build_goto(i, x);
             if(!gotos.empty()) {
               c.push_back(gotos);
@@ -311,28 +312,6 @@ class SetGenerator {
       }
 
       return first_set;
-    }
-
-    // Given a production like A -> sSB, returns sSB
-    std::string get_RHS(const std::string production) {
-      const auto& found = production.find(RULE_SEP);
-
-      if(found != std::string::npos) {
-        return remove_whitespace(production.substr(found + 2)); // skip "->"
-      }
-
-      return "";
-    }
-
-    // Given production A -> sSB, returns A
-    std::string get_LHS(const std::string production) {
-      const auto& found = production.find(RULE_SEP);
-
-      if(found != std::string::npos) {
-        return remove_whitespace(production.substr(0, found));
-      }
-
-      return "";
     }
 
     /**
