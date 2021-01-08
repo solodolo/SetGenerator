@@ -57,12 +57,12 @@ std::string get_LHS(const std::string production) {
 }
 
   // Return a list of the non-terminals in the provided list of symbols
-  std::vector<std::string> get_nonterminals(std::vector<std::string> symbols) {
-    std::vector<std::string> non_terminals;
+  std::unordered_set<std::string> get_nonterminals(std::vector<std::string> symbols) {
+    std::unordered_set<std::string> non_terminals;
 
     for(const std::string& symbol : symbols) {
       if(!is_terminal(symbol)) {
-        non_terminals.push_back(symbol);
+        non_terminals.insert(symbol);
       }
     }
 
@@ -70,12 +70,12 @@ std::string get_LHS(const std::string production) {
   }
 
   // Return a list of the terminals in the provided list of symbols
-  std::vector<std::string> get_terminals(std::vector<std::string> symbols) {
-    std::vector<std::string> terminals;
+  std::unordered_set<std::string> get_terminals(std::vector<std::string> symbols) {
+    std::unordered_set<std::string> terminals;
 
     for(const std::string& symbol : symbols) {
       if(is_terminal(symbol)) {
-        terminals.push_back(symbol);
+        terminals.insert(symbol);
       }
     }
 
