@@ -5,35 +5,7 @@
 #include <string>
 #include <regex>
 
-// special symbol for grammar rule serparator
-const static std::string RULE_SEP = "->";
-
-// empty set symbol
-const static std::string EPSILON = "~";
-
-// EOF symbol
-const static std::string DOLLAR = "$";
-
-// Determines if symbol is a terminal
-// TODO : Find a better spot for this
-bool is_terminal(const std::string symbol) {
-  return !std::regex_match(symbol, std::regex("[A-Z]"));
-}
-
-// Remove space characters in string
-// TODO : Find a better spot for this
-std::string remove_whitespace(const std::string& s) {
-  std::string ret = "";
-  for(const char& c : s) {
-    if(c == ' ') {
-      continue;
-    }
-
-    ret += c;
-  }
-
-  return ret;
-}
+#include "grammar.hpp"
 
 /**
  * Represents an item in an LR(1) grammar
