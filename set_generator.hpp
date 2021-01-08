@@ -11,6 +11,9 @@ const static std::string RULE_SEP = "->";
 // empty set symbol
 const static std::string EPSILON = "~";
 
+// EOF symbol
+const static std::string DOLLAR = "$";
+
 // Determines if symbol is a terminal
 // TODO : Find a better spot for this
 bool is_terminal(const std::string symbol) {
@@ -140,22 +143,33 @@ class LR1Item {
 struct LR1ItemHash {
   // Return a hash for this item
   std::size_t operator()(const LR1Item& item) const noexcept {
-    return std::hash<std::string>{}(item.get_str_for_hash());
+    std::size_t h = std::hash<std::string>{}(item.get_str_for_hash());
+    return h;
   }
 };
 
 class SetGenerator {
   public:
+    SetGenerator(const std::vector<std::string>& grammar) {
+      // Save and augment the provided grammar
+      this->grammar = grammar;
+      std::string augmented = get_augmented_rule();
+      this->grammar.insert(this->grammar.begin(), augmented);
+    }
+
     // Calculates the first sets for each symbol in the grammar
     // Returns a map of symbol => { '(', '+', ...}
-    std::unordered_map<std::string, std::unordered_set<std::string>> build_first_sets(const std::vector<std::string>& grammar) {
+    std::unordered_map<std::string, std::unordered_set<std::string>> build_first_sets() {
       // Remove any previous sets
       first_sets.clear();
 
       for(const std::string& production : grammar) {
-        const std::string symbol = production.substr(0, 1);
-        first_of(grammar, symbol);
+        const std::string symbol = get_LHS(production);
+        first_of(symbol);
       }
+
+      // Make sure we add a first set for our EOF symbol
+      first_sets[DOLLAR] = { DOLLAR };
 
       // We don't need empty set key in firsts sets
       first_sets.erase(EPSILON);
@@ -172,7 +186,7 @@ class SetGenerator {
      *     For each token b in FIRST(βt),
      *       Add [B → ⋅ γ, b] to S
      */
-    std::unordered_set<LR1Item, LR1ItemHash> build_closure_set(const std::vector<std::string>& grammar, const std::unordered_set<LR1Item, LR1ItemHash>& s) {
+    std::unordered_set<LR1Item, LR1ItemHash> build_closure_set(const std::unordered_set<LR1Item, LR1ItemHash>& s) {
       std::queue<LR1Item> q;
 
       for(const LR1Item& item : s) {
@@ -186,16 +200,14 @@ class SetGenerator {
         const LR1Item& item = q.front(); q.pop();
 
         if(item.next_is_non_terminal()) {
-          // For each production B → γ in G
           std::string B = item.get_next_symbol();
-          std::vector<std::string> productions = get_symbol_productions(grammar, B);
-          for(const std::string production : productions) {
+          std::string beta = item.get_beta_symbols();
+          std::string t = item.get_lookahead();
+
+          std::vector<std::string> productions = get_symbol_productions(B);
+          std::unordered_set<std::string> first_tokens = first(beta+t); // FIRST(βt)
+          for(const std::string production : productions) { // For each production B → γ in G
             // For each token b in FIRST(βt)
-            std::string beta = item.get_beta_symbols();
-            std::string t = item.get_lookahead();
-            
-            // For each token b in FIRST(βt)
-            std::unordered_set<std::string> first_tokens = first(beta+t);
             for(std::string b : first_tokens) {
               LR1Item closure_item(production, b, 0);
               // Add [B → ⋅ γ, b] to S
@@ -213,19 +225,109 @@ class SetGenerator {
     }
 
     // Augments grammar then builds closure from the augmented item
-    std::unordered_set<LR1Item, LR1ItemHash> build_initial_closure(const std::vector<std::string>& grammar) {
-      // Create set with initial item
-      LR1Item augmented("S' -> E", "$", 0);
+    std::unordered_set<LR1Item, LR1ItemHash> build_initial_closure() {
+      // Create set with augmented item
+      LR1Item augmented(grammar[0], DOLLAR, 0);
       std::unordered_set<LR1Item, LR1ItemHash> s;
       s.insert(augmented);
 
-      std::unordered_set<LR1Item, LR1ItemHash> closure = build_closure_set(grammar, s);
+      // Build closure from augmented item
+      std::unordered_set<LR1Item, LR1ItemHash> closure = build_closure_set(s);
       s.merge(closure);
 
       return s;
     }
 
+    /**
+     * Returns the closure of the set of all items [A → α X ⋅ β, t] such that
+     * [A → α ⋅ X β, t] is in item_set and where X == symbol
+     * Each of these items is part of the kernel set
+     * 
+     * psudocode from Dragon book 4.7.2
+     * GOTO(I,X)
+     *  init J to be the empty set
+     *  for each item [A → α ⋅ X β, t] in I
+     *    add item [A → α X ⋅ β, t] to J
+     *  return closure(J)
+     * 
+     */ 
+    std::unordered_set<LR1Item, LR1ItemHash> build_goto(const std::unordered_set<LR1Item, LR1ItemHash>& item_set, const std::string& symbol) {
+      // init j to be empty set
+      std::unordered_set<LR1Item, LR1ItemHash> j = get_kernel_items(item_set, symbol);
+      std::unordered_set<LR1Item, LR1ItemHash> closure = build_closure_set(j);
+      j.merge(closure);
+      return j;
+    }
+
+    /**
+     * Builds all item sets for the augmented grammar
+     *
+     * psudocode from Dragon book 4.7.2
+     * 
+     * ITEMS(G)
+     *  init C to {closure(augmented_item)}
+     *  repeat until no items are added to C
+     *    for each set I in C
+     *      for each grammar symbol X
+     *        if GOTO(I,X) not empty and not in C
+     *          add GOTO(I,X) to C
+     */
+    std::vector<std::unordered_set<LR1Item, LR1ItemHash>> build_item_sets() {
+      // init C to {closure(augmented_item)}
+      std::unordered_set<LR1Item, LR1ItemHash> i0 = build_initial_closure();
+      std::vector<std::unordered_set<LR1Item, LR1ItemHash>> c = {i0};
+
+      // Track the gotos we have already done so we don't
+      // duplicate sets in c
+      //
+      // If all items in the kernel set exist in completed_gotos
+      // skip GOTO(I,X)
+      // Otherwise
+      // add them and compute GOTO(I,X)
+      std::unordered_set<LR1Item, LR1ItemHash> completed_gotos;
+
+      int prev_size = 0;
+      while(true) {
+        // for each set i in c
+        for(const std::unordered_set<LR1Item, LR1ItemHash>& i : c) {
+          // for each grammar symbol X
+          for(auto it = first_sets.begin(); it != first_sets.end(); ++it) {
+            std::string x = (*it).first;
+            std::unordered_set<LR1Item, LR1ItemHash> kernel_items = get_kernel_items(i, x);
+
+            bool all_done = true;
+            for(const LR1Item& kernel_item : kernel_items) {
+              auto result = completed_gotos.insert(kernel_item);
+              all_done = all_done && !result.second;
+            }
+
+            if(all_done) {
+              continue;
+            }
+
+            // if GOTO(I,X) not empty and not in C
+            // add GOTO(I,X) to C
+            std::unordered_set<LR1Item, LR1ItemHash> gotos = build_goto(i, x);
+            if(!gotos.empty()) {
+              c.push_back(gotos);
+            }
+          }
+        }
+
+        if(prev_size == c.size()) {
+          break;
+        }
+        prev_size = c.size();
+      }
+
+      return c;
+    }
+
   private:
+    // The provided grammar
+    std::vector<std::string> grammar;
+
+    // Holds the FIRST(X) sets for each grammar item X
     std::unordered_map<std::string, std::unordered_set<std::string>> first_sets;
 
   private:
@@ -244,7 +346,7 @@ class SetGenerator {
      *     - If First(Y1) First(Y2)..First(Yk) all contain ε then add ε
      *       to First(Y1Y2..Yk) as well.
      */
-    void first_of(const std::vector<std::string>& grammar, const std::string& symbol) {
+    void first_of(const std::string& symbol) {
 
       if(first_sets.count(symbol) > 0) {
         return;
@@ -253,12 +355,12 @@ class SetGenerator {
       first_sets[symbol] = {};
 
       // first(X) is just X
-      if(is_terminal(symbol) || symbol == EPSILON) {
+      if(is_terminal(symbol) || symbol == EPSILON || symbol == DOLLAR) {
         first_sets[symbol].insert(symbol);
         return;
       }
 
-      std::vector<std::string> productions = get_symbol_productions(grammar, symbol);
+      std::vector<std::string> productions = get_symbol_productions(symbol);
       for(const std::string& production : productions) {
         std::string rhs = get_RHS(production);
 
@@ -273,7 +375,7 @@ class SetGenerator {
           if(cur_symbol == " ") {
             continue;
           }
-          first_of(grammar, cur_symbol);
+          first_of(cur_symbol);
 
           std::unordered_set<std::string> y = first_sets[cur_symbol];
 
@@ -323,7 +425,8 @@ class SetGenerator {
         }
 
         // Merge FIRST(symbol) which may include epsilon
-        first_set.merge(first_sets[symbol]);
+        std::unordered_set<std::string> symbol_first_set = first_sets[symbol];
+        first_set.merge(symbol_first_set);
 
         if(first_set.count(EPSILON) > 0) {
           // Remove epsilon and continue to next symbol
@@ -349,7 +452,18 @@ class SetGenerator {
       const auto& found = production.find(RULE_SEP);
 
       if(found != std::string::npos) {
-        return production.substr(found + 3); // skip "-> "
+        return remove_whitespace(production.substr(found + 2)); // skip "->"
+      }
+
+      return "";
+    }
+
+    // Given production A -> sSB, returns A
+    std::string get_LHS(const std::string production) {
+      const auto& found = production.find(RULE_SEP);
+
+      if(found != std::string::npos) {
+        return remove_whitespace(production.substr(0, found));
       }
 
       return "";
@@ -365,12 +479,12 @@ class SetGenerator {
       * 
       * when given A will return ['A -> B', 'A -> d']
       */
-    std::vector<std::string> get_symbol_productions(const std::vector<std::string>& grammar, const std::string& symbol) {
+    std::vector<std::string> get_symbol_productions(const std::string& symbol) {
       std::vector<std::string> ret;
 
-      for(const std::string& s : grammar) {
-        if(s.substr(0, 1) == symbol) {
-          ret.push_back(s);
+      for(const std::string& production : grammar) {
+        if(get_LHS(production) == symbol) {
+          ret.push_back(production);
         }
       }
 
@@ -391,14 +505,60 @@ class SetGenerator {
           continue;
         }
 
-        first_tokens.merge(first_sets[symbol]);
+        std::unordered_set<std::string> symbol_first_set = first_sets[symbol];
+        first_tokens.merge(symbol_first_set);
       }
 
       // Merge first set of lookahead t
+      std::unordered_set<std::string> lookahead_first_set = first_sets[t];
       if(first_sets.count(t) > 0) {
-        first_tokens.merge(first_sets[t]);
+        first_tokens.merge(lookahead_first_set);
       }
 
       return first_tokens;
+    }
+
+    /**
+     * Gets a set of kernel items
+     * From a set containing items like [A → α ⋅ X β, t],
+     * the kernel items are those of the form [A → α X ⋅ β, t]
+     * where symbol == x
+     * 
+     * They are the items in the goto set before the closure items are added
+     * 
+     */
+    std::unordered_set<LR1Item, LR1ItemHash> get_kernel_items(const std::unordered_set<LR1Item, LR1ItemHash>& item_set, const std::string& symbol) {
+      std::unordered_set<LR1Item, LR1ItemHash> kernel_items;
+
+      // for each item in I
+      for(const LR1Item& item : item_set) {
+        // check that the item's next symbol == X
+        if(item.get_next_symbol() == symbol) {
+          LR1Item next_item(item);
+          // add item [A → α X ⋅ β, t] to j
+          next_item.increment_position();
+          kernel_items.insert(next_item);
+        }
+      }
+
+      return kernel_items;
+    }
+
+    /** Creates an augmented grammar rule for the given grammar
+     * Assumes grammar[0] is the original starting rule
+     * Assumes S' is not already part of the grammar and
+     * can be used as the augmented lhs
+     *
+     * Given grammar[0] as S -> E, will return S' -> S
+     * 
+     */
+    std::string get_augmented_rule() {
+      // Nothing to do with no rules
+      if(grammar.empty()) {
+        return "";
+      }
+
+      std::string lhs = get_LHS(grammar[0]);
+      return "S' -> " + lhs;
     }
 };
