@@ -3,6 +3,7 @@
 
 #include <regex>
 #include <string>
+#include <unordered_set>
 
 // special symbol for grammar rule serparator
 const static std::string RULE_SEP = "->";
@@ -12,6 +13,10 @@ const static std::string EPSILON = "~";
 
 // EOF symbol
 const static std::string DOLLAR = "$";
+
+// The lhs to use for the augmented grammar rule
+// i.e. the S' in S' -> S
+const static std::string AUGMENTED_LHS = "S'";
 
 // Determines if symbol is a terminal
 // TODO : Find a better spot for this
