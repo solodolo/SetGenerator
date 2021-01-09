@@ -142,7 +142,7 @@ class SetGenerator {
     std::set<std::set<LR1Item, LR1Comparator>, LR1SetComparator> build_item_sets() {
       // init c to {closure(augmented_item)}
       std::set<LR1Item, LR1Comparator> i0 = build_initial_closure();
-      std::set<std::set<LR1Item, LR1Comparator>, LR1SetComparator> c = {i0};
+      item_sets = {i0};
 
       // Track the gotos we have already done so we don't
       // duplicate sets in c
@@ -159,7 +159,7 @@ class SetGenerator {
         int i = 0;
 
         // for each set i in c
-        for(const std::set<LR1Item, LR1Comparator>& Ii : c) {
+        for(const std::set<LR1Item, LR1Comparator>& Ii : item_sets) {
           // for each grammar symbol X
           for(auto it = first_sets.begin(); it != first_sets.end(); ++it) {
             std::string x = (*it).first;
@@ -171,12 +171,12 @@ class SetGenerator {
               // add GOTO(I,X) to c
               // c is a set so GOTO will only be added
               // if it is not in c already
-              auto result = c.insert(gotos);
+              auto result = item_sets.insert(gotos);
               if(result.second) { // gotos wasn't in c
-                goto_indices[goto_key] = c.size() - 1;
+                goto_indices[goto_key] = item_sets.size() - 1;
               }
               else { // gotos was in c
-                goto_indices[goto_key] = std::distance(c.begin(), result.first);
+                goto_indices[goto_key] = std::distance(item_sets.begin(), result.first);
               }
             }
           }
@@ -185,17 +185,23 @@ class SetGenerator {
         }
 
         // Break if c hasn't changed
-        if(prev_size == c.size()) {
+        if(prev_size == item_sets.size()) {
           break;
         }
-        prev_size = c.size();
+        prev_size = item_sets.size();
       }
 
-      return c;
+      return item_sets;
     }
 
+    // Return the cached goto_indices
     const std::unordered_map<std::string, int>& get_goto_indices() {
       return goto_indices;
+    }
+
+    // Return the cached item_sets
+    const std::set<std::set<LR1Item, LR1Comparator>, LR1SetComparator>& get_item_sets() {
+      return item_sets;
     }
 
   private:
@@ -204,6 +210,9 @@ class SetGenerator {
 
     // Holds the FIRST(X) sets for each grammar item X
     std::unordered_map<std::string, std::unordered_set<std::string>> first_sets;
+
+    // Holds the item sets calculated in build_item_sets
+    std::set<std::set<LR1Item, LR1Comparator>, LR1SetComparator> item_sets;
 
     // Holds mappings of the form "<input set index>,<input symbol>" => "<output set index>"
     std::unordered_map<std::string, int> goto_indices;
