@@ -18,7 +18,7 @@ class SetGenerator {
     SetGenerator(const std::vector<std::string>& grammar) {
       // Save and augment the provided grammar
       this->grammar = grammar;
-      std::string augmented = get_augmented_rule();
+      std::string augmented = get_augmented_production();
       this->grammar.insert(this->grammar.begin(), augmented);
     }
 
@@ -51,14 +51,14 @@ class SetGenerator {
      *     For each token b in FIRST(βt),
      *       Add [B → ⋅ γ, b] to S
      */
-    std::unordered_set<LR1Item, LR1ItemHash> build_closure_set(const std::unordered_set<LR1Item, LR1ItemHash>& s) {
+    std::set<LR1Item, LR1Comparator> build_closure_set(const std::set<LR1Item, LR1Comparator>& s) {
       std::queue<LR1Item> q;
 
       for(const LR1Item& item : s) {
         q.push(item);
       }
 
-      std::unordered_set<LR1Item, LR1ItemHash> closure;
+      std::set<LR1Item, LR1Comparator> closure;
 
       // For each item [A → α ⋅ B β, t] in S
       while(!q.empty()) {
@@ -69,12 +69,14 @@ class SetGenerator {
           std::string beta = item.get_beta_symbols();
           std::string t = item.get_lookahead();
 
-          std::vector<std::string> productions = get_symbol_productions(B);
+          std::vector<int> production_indices = get_production_indices(B);
           std::unordered_set<std::string> first_tokens = first(beta+t); // FIRST(βt)
-          for(const std::string production : productions) { // For each production B → γ in G
+          for(int pi : production_indices) { // For each production B → γ in G
+            const std::string& production = grammar[pi];
+
             // For each token b in FIRST(βt)
             for(std::string b : first_tokens) {
-              LR1Item closure_item(production, b, 0);
+              LR1Item closure_item(production, pi, b, 0);
               // Add [B → ⋅ γ, b] to S
               auto result = closure.insert(closure_item);
 
@@ -90,14 +92,14 @@ class SetGenerator {
     }
 
     // Augments grammar then builds closure from the augmented item
-    std::unordered_set<LR1Item, LR1ItemHash> build_initial_closure() {
+    std::set<LR1Item, LR1Comparator> build_initial_closure() {
       // Create set with augmented item
-      LR1Item augmented(grammar[0], DOLLAR, 0);
-      std::unordered_set<LR1Item, LR1ItemHash> s;
+      LR1Item augmented(grammar[0], 0, DOLLAR, 0);
+      std::set<LR1Item, LR1Comparator> s;
       s.insert(augmented);
 
       // Build closure from augmented item
-      std::unordered_set<LR1Item, LR1ItemHash> closure = build_closure_set(s);
+      std::set<LR1Item, LR1Comparator> closure = build_closure_set(s);
       s.merge(closure);
 
       return s;
@@ -116,10 +118,10 @@ class SetGenerator {
      *  return closure(J)
      * 
      */ 
-    std::unordered_set<LR1Item, LR1ItemHash> build_goto(const std::unordered_set<LR1Item, LR1ItemHash>& item_set, const std::string& symbol) {
+    std::set<LR1Item, LR1Comparator> build_goto(const std::set<LR1Item, LR1Comparator>& item_set, const std::string& symbol) {
       // init j to be empty set
-      std::unordered_set<LR1Item, LR1ItemHash> j = get_kernel_items(item_set, symbol);
-      std::unordered_set<LR1Item, LR1ItemHash> closure = build_closure_set(j);
+      std::set<LR1Item, LR1Comparator> j = get_kernel_items(item_set, symbol);
+      std::set<LR1Item, LR1Comparator> closure = build_closure_set(j);
       j.merge(closure);
       return j;
     }
@@ -137,10 +139,10 @@ class SetGenerator {
      *        if GOTO(I,X) not empty and not in C
      *          add GOTO(I,X) to C
      */
-    std::vector<std::unordered_set<LR1Item, LR1ItemHash>> build_item_sets() {
-      // init C to {closure(augmented_item)}
-      std::unordered_set<LR1Item, LR1ItemHash> i0 = build_initial_closure();
-      std::vector<std::unordered_set<LR1Item, LR1ItemHash>> c = {i0};
+    std::set<std::set<LR1Item, LR1Comparator>, LR1SetComparator> build_item_sets() {
+      // init c to {closure(augmented_item)}
+      std::set<LR1Item, LR1Comparator> i0 = build_initial_closure();
+      std::set<std::set<LR1Item, LR1Comparator>, LR1SetComparator> c = {i0};
 
       // Track the gotos we have already done so we don't
       // duplicate sets in c
@@ -149,38 +151,40 @@ class SetGenerator {
       // skip GOTO(I,X)
       // Otherwise
       // add them and compute GOTO(I,X)
-      std::unordered_set<LR1Item, LR1ItemHash> completed_gotos;
+      std::set<LR1Item, LR1Comparator> completed_gotos;
 
       int prev_size = 0;
       while(true) {
+        // The current set number
+        int i = 0;
+
         // for each set i in c
-        for(const std::unordered_set<LR1Item, LR1ItemHash>& i : c) {
+        for(const std::set<LR1Item, LR1Comparator>& Ii : c) {
           // for each grammar symbol X
           for(auto it = first_sets.begin(); it != first_sets.end(); ++it) {
             std::string x = (*it).first;
-            std::unordered_set<LR1Item, LR1ItemHash> kernel_items = get_kernel_items(i, x);
-
-            bool all_done = true;
-            for(const LR1Item& kernel_item : kernel_items) {
-              auto result = completed_gotos.insert(kernel_item);
-              all_done = all_done && !result.second;
-            }
-
-            // If all items in the kernel set exist in completed_gotos skip GOTO(I,X)
-            if(all_done) {
-              continue;
-            }
-
-            // if GOTO(I,X) not empty and not in C
-            // add GOTO(I,X) to C
-            // TODO : Optimize by passing kernel set to build_goto to avoid calculating it twice
-            std::unordered_set<LR1Item, LR1ItemHash> gotos = build_goto(i, x);
+            std::set<LR1Item, LR1Comparator> gotos = build_goto(Ii, x);
+            // if GOTO(I,X) not empty
             if(!gotos.empty()) {
-              c.push_back(gotos);
+              // The goto mapping key
+              std::string goto_key = std::to_string(i) + "," + x;
+              // add GOTO(I,X) to c
+              // c is a set so GOTO will only be added
+              // if it is not in c already
+              auto result = c.insert(gotos);
+              if(result.second) { // gotos wasn't in c
+                goto_indices[goto_key] = c.size() - 1;
+              }
+              else { // gotos was in c
+                goto_indices[goto_key] = std::distance(c.begin(), result.first);
+              }
             }
           }
+
+          ++i;
         }
 
+        // Break if c hasn't changed
         if(prev_size == c.size()) {
           break;
         }
@@ -190,12 +194,19 @@ class SetGenerator {
       return c;
     }
 
+    const std::unordered_map<std::string, int>& get_goto_indices() {
+      return goto_indices;
+    }
+
   private:
     // The provided grammar
     std::vector<std::string> grammar;
 
     // Holds the FIRST(X) sets for each grammar item X
     std::unordered_map<std::string, std::unordered_set<std::string>> first_sets;
+
+    // Holds mappings of the form "<input set index>,<input symbol>" => "<output set index>"
+    std::unordered_map<std::string, int> goto_indices;
 
   private:
     /**
@@ -227,8 +238,9 @@ class SetGenerator {
         return;
       }
 
-      std::vector<std::string> productions = get_symbol_productions(symbol);
-      for(const std::string& production : productions) {
+      std::vector<int> production_indices = get_production_indices(symbol);
+      for(int pi : production_indices) {
+        const std::string& production = grammar[pi];
         std::string rhs = get_RHS(production);
 
         // If there is a Production X → ε then add ε to first(X)
@@ -324,12 +336,14 @@ class SetGenerator {
       * 
       * when given A will return ['A -> B', 'A -> d']
       */
-    std::vector<std::string> get_symbol_productions(const std::string& symbol) {
-      std::vector<std::string> ret;
+    std::vector<int> get_production_indices(const std::string& symbol) {
+      std::vector<int> ret;
 
-      for(const std::string& production : grammar) {
+      for(int i = 0; i < grammar.size(); ++i) {
+        const std::string& production = grammar[i];
+
         if(get_LHS(production) == symbol) {
-          ret.push_back(production);
+          ret.push_back(i);
         }
       }
 
@@ -372,8 +386,8 @@ class SetGenerator {
      * They are the items in the goto set before the closure items are added
      * 
      */
-    std::unordered_set<LR1Item, LR1ItemHash> get_kernel_items(const std::unordered_set<LR1Item, LR1ItemHash>& item_set, const std::string& symbol) {
-      std::unordered_set<LR1Item, LR1ItemHash> kernel_items;
+    std::set<LR1Item, LR1Comparator> get_kernel_items(const std::set<LR1Item, LR1Comparator>& item_set, const std::string& symbol) {
+      std::set<LR1Item, LR1Comparator> kernel_items;
 
       // for each item in I
       for(const LR1Item& item : item_set) {
@@ -397,14 +411,14 @@ class SetGenerator {
      * Given grammar[0] as S -> E, will return S' -> S
      * 
      */
-    std::string get_augmented_rule() {
+    std::string get_augmented_production() {
       // Nothing to do with no rules
       if(grammar.empty()) {
         return "";
       }
 
       std::string lhs = get_LHS(grammar[0]);
-      return "S' -> " + lhs;
+      return AUGMENTED_LHS + " " + RULE_SEP + " " + lhs;
     }
 };
 

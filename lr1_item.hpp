@@ -13,7 +13,8 @@
  */ 
 class LR1Item {
   public:
-    LR1Item(std::string production, std::string lookahead, int position) :
+    LR1Item(std::string production, int production_num, std::string lookahead, int position) :
+      production_num(production_num),
       lookahead(lookahead),
       position(position) {
         // Split production at "->" into LHS and RHS
@@ -21,6 +22,8 @@ class LR1Item {
         if(found == std::string::npos) {
           throw std::runtime_error("Invalid LR1Item production: " + production);
         }
+
+        
 
         // Given S -> A, found = 2
         // lhs = "S "
@@ -67,6 +70,10 @@ class LR1Item {
       return rhs.substr(position + 1, std::string::npos);
     }
 
+    int get_production_num() const {
+      return production_num;
+    }
+
     // Gets the lookahead token
     std::string get_lookahead() const {
       return lookahead;
@@ -86,6 +93,12 @@ class LR1Item {
       }
     }
 
+    // If this rule's lhs == S'
+    bool is_augmented_production() const {
+      return lhs == AUGMENTED_LHS;
+    }
+
+    // TODO : Deprecated. Was used for storing in unordered_set.
     bool operator==(const LR1Item& rhs) const {
       return this->get_str_for_hash() == rhs.get_str_for_hash();
     }
@@ -100,6 +113,9 @@ class LR1Item {
     }
 
   private:
+    // The number of the production of this item in the grammar
+    int production_num;
+
     // LHS of production
     // With S -> E, lhs = S
     std::string lhs;
@@ -118,11 +134,39 @@ class LR1Item {
 };
 
 // Hash to store LR1 items in unordered_set
+// TODO : This method is deprecated in favor of LR1Comparator
 struct LR1ItemHash {
   // Return a hash for this item
   std::size_t operator()(const LR1Item& item) const noexcept {
     std::size_t h = std::hash<std::string>{}(item.get_str_for_hash());
     return h;
+  }
+};
+
+// lhs == rhs if their hashing strings are the same
+// i.e. if each item has the same lhs,rhs,lookahead, and position
+struct LR1Comparator {
+  bool operator()(const LR1Item& lhs, const LR1Item& rhs) const {
+    return lhs.get_str_for_hash() < rhs.get_str_for_hash();
+  }
+};
+
+// Builds a string consiting of the hashing strings of each item
+// in lhs and rhs respectively.
+// These strings are then compared to determine order.
+struct LR1SetComparator {
+  bool operator()(const std::set<LR1Item, LR1Comparator>& lhs, const std::set<LR1Item, LR1Comparator>& rhs) const {
+    std::string lhs_str;
+    for(const LR1Item& item : lhs) {
+      lhs_str += item.get_str_for_hash();
+    }
+
+    std::string rhs_str;
+    for(const LR1Item& item : rhs) {
+      rhs_str += item.get_str_for_hash();
+    }
+
+    return lhs_str < rhs_str;
   }
 };
 
