@@ -6,7 +6,7 @@
 #include "set_generator.hpp"
 
 // Table action for accepting the parse
-const static std::string ACCEPT_ACTION = "accept";
+const static std::string ACCEPT_ACTION = "acct";
 
 // Table action for shifting to state i
 const static std::string SHIFT_ACTION = "s";
@@ -18,16 +18,17 @@ class LR1ParserTableGenerator {
   public:
     LR1ParserTableGenerator(const std::vector<std::string>& grammar) : grammar(grammar), set_generator(grammar) {
       std::unordered_map<std::string, std::unordered_set<std::string>> first_sets = set_generator.build_first_sets();
+      std::vector<std::string> symbols;
       for(auto it = first_sets.begin(); it != first_sets.end(); ++it) {
         if((*it).first == AUGMENTED_LHS) {
           continue;
         }
-        all_symbols.push_back((*it).first);
+        symbols.push_back((*it).first);
       }
 
       // Get list of terminals and non-terminals to fill out
       // indices of symbol_cols
-      build_symbol_cols(get_terminals(all_symbols), get_nonterminals(all_symbols));
+      build_symbol_cols(get_terminals(symbols), get_nonterminals(symbols));
     };
 
     /**
@@ -68,19 +69,20 @@ class LR1ParserTableGenerator {
 
           // The marker is to the right of the rhs
           // item is [A → α ⋅, t] or [S' -> S ⋅, $]
-          if(next_symbol.empty()) {
+          if(next_symbol == EPSILON || next_symbol.empty()) {
             if(item.is_augmented_production()) { //[S' -> S ⋅, $]
               table[state][symbol_cols[DOLLAR]] = ACCEPT_ACTION;
             }
             else {
-              table[state][symbol_cols[item.get_lookahead()]] = REDUCE_ACTION + grammar[item.get_production_num()];
+              table[state][symbol_cols[item.get_lookahead()]] = REDUCE_ACTION + std::to_string(item.get_production_num());
             }
           }
           else {
             // item is [A → α ⋅ a B β, t] or [A → α ⋅ A B β, t]
             std::string goto_key = std::to_string(state) + "," + next_symbol;
             if(goto_indices.count(goto_key) == 0) {
-              throw std::runtime_error(goto_key + " not found in goto_indices map.");
+              // throw std::runtime_error(goto_key + " not found in goto_indices map.");
+              continue;
             }
 
             // Given GOTO(Ii, a) = Ij, goto_indices maps "i,a" => j
@@ -100,8 +102,15 @@ class LR1ParserTableGenerator {
       return table;
     };
 
-    const std::vector<std::string>& get_symbol_cols() {
+
+    // Returns cached symbols of the grammar
+    const std::vector<std::string>& get_table_symbols() {
       return all_symbols;
+    }
+
+    // Returns the cached item_sets from the set generator
+    const std::set<std::set<LR1Item, LR1Comparator>, LR1SetComparator>& get_item_sets() {
+      return set_generator.get_item_sets();
     }
 
   private:
@@ -131,17 +140,32 @@ class LR1ParserTableGenerator {
 
     // Initialize symbol_cols by mapping grammar symbols to their column indices in table
     void build_symbol_cols(const std::unordered_set<std::string>& terminals, const std::unordered_set<std::string>& non_terminals) {
+      all_symbols.reserve(terminals.size() + non_terminals.size());
+
       // Terminals will occupy 0...n - 1 table cols (action table)
       int n = 0;
       for(auto it = terminals.begin(); it != terminals.end(); ++it) {
-        symbol_cols[(*it)] = n;
+        const std::string& terminal = (*it);
+
+        // Make sure EOF goes at the end
+        if(terminal == DOLLAR) {
+          continue;
+        }
+
+        symbol_cols[terminal] = n;
+        all_symbols.push_back(terminal);
         ++n;
       }
+      
+      // Add EOF as last terminal
+      all_symbols.push_back(DOLLAR);
+      symbol_cols[DOLLAR] = n++;
 
       // Non-terminals will occupy n...m - 1 table cols (goto table)
       int m = 0;
       for(auto it = non_terminals.begin(); it != non_terminals.end(); ++it) {
         symbol_cols[(*it)] = m + n;
+        all_symbols.push_back((*it));
         ++m;
       }
     }
