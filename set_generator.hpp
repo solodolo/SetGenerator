@@ -8,6 +8,7 @@
 #include <queue>
 
 #include "lr1_item.hpp"
+#include "grammar.hpp"
 
 /**
  * Generates LR(1) first, goto, closure, and item sets for a grammar
@@ -15,12 +16,7 @@
  */ 
 class SetGenerator {
   public:
-    SetGenerator(const std::vector<std::string>& grammar) {
-      // Save and augment the provided grammar
-      this->grammar = grammar;
-      std::string augmented = get_augmented_production();
-      this->grammar.insert(this->grammar.begin(), augmented);
-    }
+    SetGenerator(Grammar grammar) : grammar(grammar) {}
 
     // Calculates the first sets for each symbol in the grammar
     // Returns a map of symbol => { '(', '+', ...}
@@ -28,8 +24,7 @@ class SetGenerator {
       // Remove any previous sets
       first_sets.clear();
 
-      for(const std::string& production : grammar) {
-        const std::string symbol = get_LHS(production);
+      for(const auto& symbol : grammar.get_all_symbols()) {
         first_of(symbol);
       }
 
@@ -206,7 +201,7 @@ class SetGenerator {
 
   private:
     // The provided grammar
-    std::vector<std::string> grammar;
+    Grammar grammar;
 
     // Holds the FIRST(X) sets for each grammar item X
     std::unordered_map<std::string, std::unordered_set<std::string>> first_sets;
@@ -410,24 +405,6 @@ class SetGenerator {
       }
 
       return kernel_items;
-    }
-
-    /** Creates an augmented grammar rule for the given grammar
-     * Assumes grammar[0] is the original starting rule
-     * Assumes S' is not already part of the grammar and
-     * can be used as the augmented lhs
-     *
-     * Given grammar[0] as S -> E, will return S' -> S
-     * 
-     */
-    std::string get_augmented_production() {
-      // Nothing to do with no rules
-      if(grammar.empty()) {
-        return "";
-      }
-
-      std::string lhs = get_LHS(grammar[0]);
-      return AUGMENTED_LHS + " " + RULE_SEP + " " + lhs;
     }
 };
 
