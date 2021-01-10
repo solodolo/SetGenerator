@@ -114,6 +114,7 @@ class LR1Item {
 
   private:
     // The number of the production of this item in the grammar
+    // Useful for determining which state to reduce to when building parse table
     int production_num;
 
     // LHS of production
