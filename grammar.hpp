@@ -61,30 +61,139 @@ std::string get_LHS(const std::string production) {
   return "";
 }
 
-  // Return a list of the non-terminals in the provided list of symbols
-  std::unordered_set<std::string> get_nonterminals(std::vector<std::string> symbols) {
-    std::unordered_set<std::string> non_terminals;
+/**
+ *  A class to store and extract grammar information
+ * 
+ * Takes a vector of strings like S -> Ab, representing
+ * the production rules of the grammar
+ * 
+ * Wraps std::vector<std::string>
+ */
+class Grammar {
+  public:
+    Grammar(const std::vector<std::string>& g) : productions(g) {
+      // Extract the terminals and non-terminals from g
+      for(const auto& production : g) {
+        // LHS should be a single non-terminal
+        std::string lhs = get_LHS(production);
+        non_terminals.insert(lhs);
+        all_symbols.insert(lhs);
 
-    for(const std::string& symbol : symbols) {
-      if(!is_terminal(symbol)) {
-        non_terminals.insert(symbol);
+        // Get rhs symbols and store them
+        std::set<std::string> rhs_symbols = extract_symbols(get_RHS(production));
+        for(const auto& rh_symbol : rhs_symbols) {
+          is_terminal(rh_symbol) ? terminals.insert(rh_symbol) : non_terminals.insert(rh_symbol);
+          all_symbols.insert(rh_symbol);
+        }
       }
+    };
+
+    // Return the const iterator to the underlying productions
+    std::vector<std::string>::const_iterator begin() {
+      return productions.cbegin();
     }
 
-    return non_terminals;
-  }
-
-  // Return a list of the terminals in the provided list of symbols
-  std::unordered_set<std::string> get_terminals(std::vector<std::string> symbols) {
-    std::unordered_set<std::string> terminals;
-
-    for(const std::string& symbol : symbols) {
-      if(is_terminal(symbol)) {
-        terminals.insert(symbol);
-      }
+    // Return the const iterator to the underlying productions
+    std::vector<std::string>::const_iterator end() {
+      return productions.cend();
     }
 
-    return terminals;
-  }
+    const std::set<std::string>& get_all_symbols() {
+      return all_symbols;
+    }
 
+    const std::set<std::string>& get_terminals() {
+      return terminals;
+    }
+
+    const std::set<std::string>& get_non_terminals() {
+      return non_terminals;
+    }
+
+    // allow bracket access to productions
+    const std::string& operator[](size_t n) {
+      return productions[n];
+    }
+
+    size_t size() {
+      return productions.size();
+    }
+
+    bool empty() {
+      return productions.empty();
+    }
+
+    /** 
+     * Inserts a new augmented production into this grammar
+     * Does nothing if the grammar has already been augmented
+     * 
+     * Given grammar[0] as S -> E, will add S' -> S to productions
+     * and will add S' to non_terminals and all_symbols
+     * 
+     * Will also add EOF to terminal symbols
+     */
+    void add_augmented_production() {
+      if(is_augmented()) {
+        return;
+      }
+
+      productions.insert(productions.begin(), get_augmented_production());
+      all_symbols.insert(AUGMENTED_LHS);
+      non_terminals.insert(AUGMENTED_LHS);
+      terminals.insert(DOLLAR);
+    }
+  private:
+    std::vector<std::string> productions;
+
+    std::set<std::string> all_symbols;
+    std::set<std::string> non_terminals;
+    std::set<std::string> terminals;
+
+    /** 
+     * Returns a set containing all the symbols in str
+     * Given "aBS+", returns {a,B,S,+}
+     * Given "A a - c", returns {A,a,-,c}
+     * 
+     * Assumes symbols are length 1. May or may not
+     * be seperated by spaces.
+     */
+    std::set<std::string> extract_symbols(std::string str) {
+      std::set<std::string> symbols;
+
+      for(int i = 0; i < str.size(); ++i) {
+        std::string symbol = str.substr(i, 1);
+        if(symbol == " ") {
+          continue;
+        }
+
+        symbols.insert(symbol);
+      }
+
+      return symbols;
+    }
+
+    /** Creates an augmented grammar rule for the given grammar
+     * Assumes grammar[0] is the original starting rule
+     * Assumes S' is not already part of the grammar and
+     * can be used as the augmented lhs
+     *
+     * Given grammar[0] as S -> E, will return S' -> S
+     * 
+     */
+    std::string get_augmented_production() {
+      // Nothing to do with no rules
+      if(empty()) {
+        return "";
+      }
+
+      std::string lhs = get_LHS(productions[0]);
+      return AUGMENTED_LHS + " " + RULE_SEP + " " + lhs;
+    }
+
+    // Checks for a AUGMENTED_LHS symbol in non_terminals
+    // If found, assumes this grammar has already been augmented
+    bool is_augmented() {
+      return non_terminals.count(AUGMENTED_LHS) > 0;
+    }
+};
 #endif /* _GRAMMAR_HPP_ */
