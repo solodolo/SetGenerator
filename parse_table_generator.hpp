@@ -16,7 +16,7 @@ const static std::string REDUCE_ACTION = "r";
 
 class LR1ParserTableGenerator {
   public:
-    LR1ParserTableGenerator(const std::vector<std::string>& grammar) : grammar(grammar), set_generator(grammar) {
+    LR1ParserTableGenerator(Grammar grammar) : grammar(grammar), set_generator(grammar) {
       std::unordered_map<std::string, std::unordered_set<std::string>> first_sets = set_generator.build_first_sets();
       std::vector<std::string> symbols;
       for(auto it = first_sets.begin(); it != first_sets.end(); ++it) {
@@ -28,7 +28,7 @@ class LR1ParserTableGenerator {
 
       // Get list of terminals and non-terminals to fill out
       // indices of symbol_cols
-      build_symbol_cols(get_terminals(symbols), get_nonterminals(symbols));
+      build_symbol_cols(grammar.get_terminals(), grammar.get_non_terminals());
     };
 
     /**
@@ -102,19 +102,18 @@ class LR1ParserTableGenerator {
       return table;
     };
 
-
-    // Returns cached symbols of the grammar
-    const std::vector<std::string>& get_table_symbols() {
-      return all_symbols;
-    }
-
     // Returns the cached item_sets from the set generator
     const std::set<std::set<LR1Item, LR1Comparator>, LR1SetComparator>& get_item_sets() {
       return set_generator.get_item_sets();
     }
 
+    // Returns the symbols in the column order they appear in table
+    const std::vector<std::string>& get_table_columns() {
+      return cols;
+    }
+
   private:
-    const std::vector<std::string> grammar;
+    Grammar grammar;
     SetGenerator set_generator;
 
     /** 
@@ -135,37 +134,37 @@ class LR1ParserTableGenerator {
     // Maps symbols to their column indices in table.
     std::unordered_map<std::string, int> symbol_cols;
 
-    // All symbols in left-right order in table
-    std::vector<std::string> all_symbols;
+    // The symbols in table in column order
+    std::vector<std::string> cols;
 
     // Initialize symbol_cols by mapping grammar symbols to their column indices in table
-    void build_symbol_cols(const std::unordered_set<std::string>& terminals, const std::unordered_set<std::string>& non_terminals) {
-      all_symbols.reserve(terminals.size() + non_terminals.size());
-
+    void build_symbol_cols(const std::set<std::string>& terminals, const std::set<std::string>& non_terminals) {
       // Terminals will occupy 0...n - 1 table cols (action table)
       int n = 0;
       for(auto it = terminals.begin(); it != terminals.end(); ++it) {
-        const std::string& terminal = (*it);
-
-        // Make sure EOF goes at the end
-        if(terminal == DOLLAR) {
+        // Add EOF last
+        if((*it) == DOLLAR) {
           continue;
         }
-
+        const std::string& terminal = (*it);
         symbol_cols[terminal] = n;
-        all_symbols.push_back(terminal);
+        cols.push_back(*it);
         ++n;
       }
-      
-      // Add EOF as last terminal
-      all_symbols.push_back(DOLLAR);
+
+      // Now add EOF
       symbol_cols[DOLLAR] = n++;
+      cols.push_back(DOLLAR);
 
       // Non-terminals will occupy n...m - 1 table cols (goto table)
       int m = 0;
       for(auto it = non_terminals.begin(); it != non_terminals.end(); ++it) {
+        // The augmented grammar symbol won't be in the parse table
+        if((*it) == AUGMENTED_LHS) {
+          continue;
+        }
         symbol_cols[(*it)] = m + n;
-        all_symbols.push_back((*it));
+        cols.push_back(*it);
         ++m;
       }
     }
