@@ -82,6 +82,10 @@ class Grammar {
         // Get rhs symbols and store them
         std::set<std::string> rhs_symbols = extract_symbols(get_RHS(production));
         for(const auto& rh_symbol : rhs_symbols) {
+          // Skip empty set symbol since it is just a placeholder
+          if(rh_symbol == EPSILON) {
+            continue;
+          }
           is_terminal(rh_symbol) ? terminals.insert(rh_symbol) : non_terminals.insert(rh_symbol);
           all_symbols.insert(rh_symbol);
         }
