@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <iostream>
+#include <fstream>
 #include <set>
 #include "parse_table_generator.hpp"
 
@@ -49,31 +50,34 @@ const static std::vector<std::string> G4 {
   {"J -> JuK"},
   {"J -> K"},
   {"K -> gvK"},
-  {"K -> L"},
-  {"L -> hL"},
-  {"L -> M"},
+  {"K -> M"},
   {"M -> MiU"},
   {"M -> U"},
   {"U -> UwN"},
   {"U -> N"},
   {"N -> NjO"},
   {"N -> O"},
-  {"O -> OkP"},
-  {"O -> P"},
+  {"O -> OkL"},
+  {"O -> L"},
+  {"L -> hL"},
+  {"L -> P"},
   {"P -> g"},
   {"P -> l"},
   {"P -> m"},
   {"P -> x"},
   {"P -> d"},
   {"P -> eKf"},
-  {"Q -> neKfVSTq"},
-  {"S -> oeKfV"},
+  {"Q -> WSTq"},
+  {"W -> neKfV"},
+  {"S -> X"},
   {"S -> ~"},
+  {"X -> XoeKfV"},
+  {"X -> oeKfV"},
   {"T -> pV"},
   {"T -> ~"},
   {"R -> redslfVq"},
   {"R -> redsgfVq"},
-  {"R -> redHfVq"},
+  {"R -> redsHfVq"},
   {"F -> K"},
   {"F -> H"},
   {"F -> Q"},
@@ -216,12 +220,74 @@ void print_go_parse_table(const std::vector<std::vector<std::string>>& parse_tab
   }
 }
 
-int main() {
+int write_table(const std::string out_path, const std::vector<std::vector<std::string>>& parse_table, const std::vector<std::string>& symbols) {
+  std::ofstream out_stream(out_path);
+
+  if(!out_stream) {
+    std::cerr << "failed to open output stream " << out_path << ": " << strerror(errno) << "\n";
+    return 1;
+  }
+
+  // write the symbol header
+  for(int i = 0; i < symbols.size(); ++i) {
+    const auto& symbol = symbols[i];
+    out_stream << symbol;
+
+    if(i < symbols.size() - 1) {
+      out_stream << ",";
+    }
+  }
+
+  out_stream << "\n";
+
+  for(int i = 0; i < parse_table.size(); ++i) {
+    int row_size = parse_table[i].size();
+    for(int j = 0; j < row_size; ++j) {
+      const std::string& action = parse_table[i][j];
+      out_stream << action;
+
+      if(j < row_size - 1) {
+        out_stream << ", ";
+      }
+    }
+
+    out_stream << "\n";
+  }
+
+  out_stream.close();
+  return 0;
+}
+
+void print_usage() {
+  std::cout << "usage: set_generator <path/to/table/output>\n";
+}
+
+int main(int argc, char **argv) {
+  if(argc < 2) {
+    print_usage();
+    exit(0);
+  }
+
   Grammar grammar(G4);
   grammar.add_augmented_production();
 
   LR1ParserTableGenerator generator(grammar);
+
+  std::cout << "generating parse table\n";
+
   std::vector<std::vector<std::string>> parse_table = generator.build_parse_table();
-  // print_parse_table(parse_table, generator.get_table_columns());
-  print_go_parse_table(parse_table, generator.get_table_columns());
+
+  std::cout << "generating table symbols\n";
+  std::vector<std::string> symbols = generator.get_table_columns();
+
+  std::string output_path(argv[1]);
+
+  std::cout << "writing table output to " << output_path << "\n";
+
+  int write_result = write_table(output_path, parse_table, symbols);
+  if(write_result == 0) {
+    std::cout << "table successfully written\n";
+  }
+
+  return write_result;
 }
