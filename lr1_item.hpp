@@ -27,7 +27,7 @@ class LR1Item {
         // lhs = "S "
         // rhs = " A"
         lhs = production.substr(0, found);
-        std::string rhs_str = production.substr(found + 2, std::string::npos);
+        rhs_str = production.substr(found + 2, std::string::npos);
 
         // Trim leading and trailing whitespace from both strings
         lhs = remove_whitespace(lhs);
