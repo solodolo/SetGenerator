@@ -49,7 +49,7 @@ class SetGenerator {
     std::set<LR1Item, LR1Comparator> build_closure_set(const std::set<LR1Item, LR1Comparator>& s) {
       std::queue<LR1Item> q;
 
-      for(const LR1Item& item : s) {
+      for(LR1Item item : s) {
         q.push(item);
       }
 
@@ -57,15 +57,17 @@ class SetGenerator {
 
       // For each item [A → α ⋅ B β, t] in S
       while(!q.empty()) {
-        const LR1Item& item = q.front(); q.pop();
+        const LR1Item item = q.front(); 
+        q.pop();
 
         if(item.next_is_non_terminal()) {
           std::string B = item.get_next_symbol();
-          std::string beta = item.get_beta_symbols();
+          std::vector<std::string> beta_t = item.get_beta_symbols();
           std::string t = item.get_lookahead();
+          beta_t.push_back(t);
 
           std::vector<int> production_indices = get_production_indices(B);
-          std::unordered_set<std::string> first_tokens = first(beta+t); // FIRST(βt)
+          std::unordered_set<std::string> first_tokens = first(beta_t); // FIRST(βt)
           for(int pi : production_indices) { // For each production B → γ in G
             const std::string& production = grammar[pi];
 
@@ -89,9 +91,8 @@ class SetGenerator {
     // Augments grammar then builds closure from the augmented item
     std::set<LR1Item, LR1Comparator> build_initial_closure() {
       // Create set with augmented item
-      LR1Item augmented(grammar[0], 0, DOLLAR, 0);
       std::set<LR1Item, LR1Comparator> s;
-      s.insert(augmented);
+      s.insert(LR1Item(grammar[0], 0, DOLLAR, 0));
 
       // Build closure from augmented item
       std::set<LR1Item, LR1Comparator> closure = build_closure_set(s);
@@ -245,16 +246,15 @@ class SetGenerator {
       std::vector<int> production_indices = get_production_indices(symbol);
       for(int pi : production_indices) {
         const std::string& production = grammar[pi];
-        std::string rhs = get_RHS(production);
+        std::vector<std::string> rhs = Grammar::extract_symbols(get_RHS(production));
 
         // If there is a Production X → ε then add ε to first(X)
-        if(rhs == EPSILON) {
+        if(rhs.size() == 1 && rhs[0] == EPSILON) {
           first_sets[symbol].insert(EPSILON);
         }
 
         bool all_contain_epsilon = true;
-        for(int i = 0; i < rhs.size(); ++i) {
-          const std::string cur_symbol = rhs.substr(i, 1);
+        for(const std::string& cur_symbol : rhs) {
           if(cur_symbol == " ") {
             continue;
           }
@@ -294,14 +294,11 @@ class SetGenerator {
      * the non-epsilon symbols of FIRST(X3) if epsilon in FIRST(X1) and FIRST(X2).
      * Finally add epsilon to FIRST(X1X2...Xn) if epsilon in FIRST(Xi), 1 <= i <= n
      */
-    std::unordered_set<std::string> first(const std::string& symbols) {
+    std::unordered_set<std::string> first(const std::vector<std::string>& symbols) {
       std::unordered_set<std::string> first_set;
 
       bool last_had_epsilon = true;
-      for(int i = 0; i < symbols.size(); ++i) {
-        // Get Xi from symbols
-        std::string symbol = symbols.substr(i, 1);
-
+      for(const std::string& symbol : symbols) {
         // Do nothing if symbol isn't in first_sets table
         if(symbol == EPSILON || first_sets.count(symbol) == 0) {
           continue;
@@ -352,33 +349,6 @@ class SetGenerator {
       }
 
       return ret;
-    }
-
-    // Looks up each symbol in beta + t in first_sets
-    // then returns the merged set
-    // Returns FIRST(βt)
-    std::unordered_set<std::string> get_first_tokens(const std::string& beta, const std::string& t) {
-      std::unordered_set<std::string> first_tokens;
-
-      // Get first_set of each symbol in beta
-      for(int i = 0; i < beta.size(); ++i) {
-        std::string symbol = beta.substr(i, 1);
-        
-        if(first_sets.count(symbol) == 0) {
-          continue;
-        }
-
-        std::unordered_set<std::string> symbol_first_set = first_sets[symbol];
-        first_tokens.merge(symbol_first_set);
-      }
-
-      // Merge first set of lookahead t
-      std::unordered_set<std::string> lookahead_first_set = first_sets[t];
-      if(first_sets.count(t) > 0) {
-        first_tokens.merge(lookahead_first_set);
-      }
-
-      return first_tokens;
     }
 
     /**

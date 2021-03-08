@@ -23,18 +23,26 @@ class LR1Item {
           throw std::runtime_error("Invalid LR1Item production: " + production);
         }
 
-        
-
         // Given S -> A, found = 2
         // lhs = "S "
         // rhs = " A"
         lhs = production.substr(0, found);
-        rhs = production.substr(found + 2, std::string::npos);
+        std::string rhs_str = production.substr(found + 2, std::string::npos);
 
         // Trim leading and trailing whitespace from both strings
         lhs = remove_whitespace(lhs);
-        rhs = remove_whitespace(rhs);
+        rhs_str = remove_whitespace(rhs_str);
+
+        std::vector<std::string> tmp = Grammar::extract_symbols(rhs_str);
+        rhs = tmp;
+
+        std::cout << std::endl;
       };
+
+    // LR1Item(const LR1Item& other) {
+    //   this->lhs = other.lhs;
+    //   this->rhs_str = other.rhs_str;
+    // }
 
     // Returns true if the symbol to the right of position is
     // a non-terminal
@@ -45,7 +53,7 @@ class LR1Item {
         return false;
       }
 
-      return !is_terminal(rhs.substr(position, 1));
+      return !is_terminal(rhs[position]);
     }
 
     // Gets the symbol to the right of position
@@ -54,7 +62,7 @@ class LR1Item {
     // S -> A . returns empty string
     std::string get_next_symbol() const {
       if(position < rhs.size()) {
-        return rhs.substr(position, 1);
+        return rhs[position];
       }
 
       return "";
@@ -62,12 +70,14 @@ class LR1Item {
 
     // Given item [A → α ⋅ B β, t], returns β
     // S -> A . B C returns [C]
-    std::string get_beta_symbols() const {
+    std::vector<std::string> get_beta_symbols() const {
       if(position >= rhs.size() - 1) {
-        return "";
+        return std::vector<std::string>();
       }
 
-      return rhs.substr(position + 1, std::string::npos);
+      const auto first = rhs.begin() + position + 1;
+      const auto last = rhs.end();
+      return std::vector<std::string>(first, last);
     }
 
     int get_production_num() const {
@@ -82,7 +92,7 @@ class LR1Item {
     // Returns a string of the members that can be used
     // for hashing
     std::string get_str_for_hash() const {
-      return lhs+rhs+lookahead+std::to_string(position);
+      return lhs+rhs_str+lookahead+std::to_string(position);
     }
 
     // Move the position marker to the right
@@ -106,7 +116,7 @@ class LR1Item {
     // Returns string version of this item
     // i.e S->A.B,$
     std::string to_string() const {
-      std::string rhs_with_pos = rhs;
+      std::string rhs_with_pos = rhs_str;
       rhs_with_pos.insert(position, ".");
 
       return lhs + RULE_SEP + rhs_with_pos + "," + lookahead;
@@ -121,9 +131,12 @@ class LR1Item {
     // With S -> E, lhs = S
     std::string lhs;
 
+    // The string representation of rhs
+    std::string rhs_str;
+
     // RHS of production
-    // With S -> E, rhs = E
-    std::string rhs;
+    // With S -> E '{{' '.', rhs = {E, '{{', '.'}
+    std::vector<std::string> rhs;
 
     // Terminal lookahead
     // E.g. the "$" in S -> .E, $

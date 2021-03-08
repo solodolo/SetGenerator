@@ -3,6 +3,7 @@
 
 #include <regex>
 #include <string>
+#include <sstream>
 #include <unordered_set>
 
 // special symbol for grammar rule serparator
@@ -21,7 +22,8 @@ const static std::string AUGMENTED_LHS = "S'";
 // Determines if symbol is a terminal
 // TODO : Find a better spot for this
 bool is_terminal(const std::string symbol) {
-  return !std::regex_match(symbol, std::regex("[A-Z]"));
+  // return !std::regex_match(symbol, std::regex("[A-Z]"));
+  return std::regex_match(symbol, std::regex("'[^[:space:]]+'"));
 }
 
 // Remove space characters in string
@@ -44,7 +46,7 @@ std::string get_RHS(const std::string production) {
   const auto& found = production.find(RULE_SEP);
 
   if(found != std::string::npos) {
-    return remove_whitespace(production.substr(found + 2)); // skip "->"
+    return production.substr(found + 2); // skip "->"
   }
 
   return "";
@@ -80,7 +82,7 @@ class Grammar {
         all_symbols.insert(lhs);
 
         // Get rhs symbols and store them
-        std::set<std::string> rhs_symbols = extract_symbols(get_RHS(production));
+        std::vector<std::string> rhs_symbols = Grammar::extract_symbols(get_RHS(production));
         for(const auto& rh_symbol : rhs_symbols) {
           // Skip empty set symbol since it is just a placeholder
           if(rh_symbol == EPSILON) {
@@ -112,6 +114,10 @@ class Grammar {
 
     const std::set<std::string>& get_non_terminals() {
       return non_terminals;
+    }
+
+    const std::string& at(const size_t n) const {
+      return productions[n];
     }
 
     // allow bracket access to productions
@@ -146,35 +152,38 @@ class Grammar {
       non_terminals.insert(AUGMENTED_LHS);
       terminals.insert(DOLLAR);
     }
+
+    /** 
+     * Returns a set containing all the symbols in str
+     * Assumes symbols are space deliminated
+     * 
+     * Given "a B S '+'", returns {a,B,S,+}
+     * Given "A a '{{' c", returns {A,a,{{,c}
+     * 
+     * Assumes symbols are length 1. May or may not
+     * be seperated by spaces.
+     */
+    static std::vector<std::string> extract_symbols(std::string str) {
+      std::vector<std::string> symbols;
+      std::string piece;
+      char delim = ' ';
+      std::stringstream stream(str);
+
+      while(std::getline(stream, piece, delim)) {
+        if(piece.length() == 0) {
+          continue;
+        }
+        symbols.push_back(piece);
+      }
+
+      return symbols;
+    }
   private:
     std::vector<std::string> productions;
 
     std::set<std::string> all_symbols;
     std::set<std::string> non_terminals;
     std::set<std::string> terminals;
-
-    /** 
-     * Returns a set containing all the symbols in str
-     * Given "aBS+", returns {a,B,S,+}
-     * Given "A a - c", returns {A,a,-,c}
-     * 
-     * Assumes symbols are length 1. May or may not
-     * be seperated by spaces.
-     */
-    std::set<std::string> extract_symbols(std::string str) {
-      std::set<std::string> symbols;
-
-      for(int i = 0; i < str.size(); ++i) {
-        std::string symbol = str.substr(i, 1);
-        if(symbol == " ") {
-          continue;
-        }
-
-        symbols.insert(symbol);
-      }
-
-      return symbols;
-    }
 
     /** Creates an augmented grammar rule for the given grammar
      * Assumes grammar[0] is the original starting rule
