@@ -31,12 +31,9 @@ class LR1Item {
 
         // Trim leading and trailing whitespace from both strings
         lhs = remove_whitespace(lhs);
-        rhs_str = remove_whitespace(rhs_str);
 
         std::vector<std::string> tmp = Grammar::extract_symbols(rhs_str);
         rhs = tmp;
-
-        std::cout << std::endl;
       };
 
     // LR1Item(const LR1Item& other) {
