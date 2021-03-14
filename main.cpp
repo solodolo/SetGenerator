@@ -4,40 +4,7 @@
 #include <set>
 #include "parse_table_generator.hpp"
 
-// Grammar 1
 const static std::vector<std::string> G1 {
-  {"S -> F"},
-  {"S -> (S + F)"},
-  {"F -> a"}
-};
-
-const static std::vector<std::string> G2 { 
-  {"E -> TX"},
-  {"X -> +TX"},
-  {"X -> ~"},
-  {"T -> FY"},
-  {"Y -> *FY"},
-  {"Y -> ~"},
-  {"F -> a"},
-  {"F -> (E)"}
-};
-
-const static std::vector<std::string> G3 {
-  {"S -> Ac"},
-  {"S -> Bb"},
-  {"S -> SCab"},
-  {"A -> a"},
-  {"A -> bB"},
-  {"A -> C"},
-  {"B -> AC"},
-  {"B -> d"},
-  {"C -> aS"},
-  {"C -> CdBd"},
-  {"C -> AB"},
-  {"C -> ~"}
-};
-
-const static std::vector<std::string> G4 {
   {"B -> C"},
   {"C -> D"},
   {"C -> E"},
@@ -93,55 +60,77 @@ const static std::vector<std::string> G4 {
   {"G -> F ';'"},
 };
 
-const static std::vector<std::string> G5 {
-  {"E -> T X"},
-  {"T -> ( E )"},
-  {"T -> a Y"},
-  {"X -> + E"},
-  {"X -> ~"},
-  {"Y -> * T E &"},
-  {"T -> ~"}
+const static std::vector<std::string> G2 {
+  {"program -> content"},
+  {"content -> content 'PASSTHROUGH'"},
+  {"content -> 'PASSTHROUGH'"},
+  {"content -> content blocks"},
+  {"content -> blocks"},
+  {"blocks -> block"},
+  
+  {"blocks -> print_block"},
+  {"blocks -> if_statement_block"},
+  {"blocks -> for_block"},
+  {"block -> '{{' statement '}}'"},
+  {"block -> '{{' statement '-}'"},
+
+  {"print_block -> '{{:' statement '}}'"},
+  {"print_block -> '{{:' statement '-}'"},
+
+  {"if_statement_block -> '{{if' expression '}}' content 'END'"},
+  {"if_statement_block -> '{{if' expression '}}' content else_if_list 'END'"},
+  {"if_statement_block -> '{{if' expression '}}' content '{{else}}' content 'END'"},
+  {"if_statement_block -> '{{if' expression '}}' content else_if_list '{{else}}' content 'END'"},
+
+  {"else_if_list -> else_if_list '{{else_if' expression '}}' content"},
+  {"else_if_list -> '{{else_if' expression '}}' content"},
+
+  {"for_block -> '{{for' 'ID' 'in' 'STRING' '}}' content 'END'"},
+  {"for_block -> '{{for' 'ID' 'in' var_name '}}' content 'END'"},
+  {"for_block -> '{{for' 'ID' 'in' func_call '}}' content 'END'"},
+
+  {"statement -> expression"},
+  {"statement -> func_call"},
+  {"var_name -> 'ID' '.' var_name"},
+  {"var_name -> 'ID'"},
+
+  {"func_call -> 'ID' '(' args ')'"},
+  
+  {"args -> arg_list"},
+  {"args -> ~"},
+
+  {"arg_list -> arg_list ',' expression"},
+  {"arg_list -> expression"},
+
+  {"expression -> var_name '=' expression"},
+  {"expression -> logic_expression"},
+  {"logic_expression -> logic_expression 'LOGIC_OP' rel_expression"},
+  {"logic_expression -> rel_expression"},
+  {"rel_expression -> rel_expression 'REL_OP' add_expression"},
+  {"rel_expression -> add_expression"},
+  {"add_expression -> add_expression '+' mult_expression"},
+  {"add_expression -> add_expression '-' mult_expression"},
+  {"add_expression -> mult_expression"},
+  {"mult_expression -> mult_expression 'MULT_OP' unary_expression"},
+  {"mult_expression -> unary_expression"},
+  {"unary_expression -> '!' unary_expression"},
+  {"unary_expression -> '-' unary_expression"},
+  {"unary_expression -> term_expression"},
+  {"term_expression -> 'STRING'"},
+  {"term_expression -> 'NUM'"},
+  {"term_expression -> 'BOOL'"},
+  {"term_expression -> var_name"},
+  {"term_expression -> '(' expression ')'"},
 };
 
-const static std::vector<std::string> G6 {
-  {"E -> T R"},
-  {"R -> ~"},
-  {"R -> + E"},
-  {"T -> F S"},
-  {"S -> ~"},
-  {"S -> * T"},
-  {"F -> n"},
-  {"F -> ( E )"}
-};
-
-const static std::vector<std::string> G7 {
-  {"S -> C C"},
-  {"C -> c C"},
-  {"C -> d"}
-};
-
-const static std::vector<std::string> G8 {
-  {"S -> A a A b"},
-  {"S -> B b B a"},
-  {"A -> ~"},
-  {"B -> ~"}
-};
-
-const static std::vector<std::string> G9 {
-  {"S -> S ; A"},
+const static std::vector<std::string> G3 {
+  {"S -> S ';' A"},
   {"S -> A"},
   {"A -> E"},
-  {"A -> i = E"},
-  {"E -> E + i"},
-  {"E -> i"}
-};
-
-const static std::vector<std::string> G10 {
-  {"S -> h B e"},
-  {"B -> B A"},
-  {"B -> ~"},
-  {"A -> x"},
-  {"A -> t"}
+  {"A -> 'id' ':=' E"},
+  {"E -> E '+' 'id'"},
+  {"E -> 'id'"},
+  {"E -> ~"},
 };
 
 void print_first_sets(std::unordered_map<std::string, std::unordered_set<std::string>> first_sets) {
@@ -235,7 +224,11 @@ int write_table(const std::string out_path, const std::vector<std::vector<std::s
 
   // write the symbol header
   for(int i = 0; i < symbols.size(); ++i) {
-    const auto& symbol = symbols[i];
+    std::string symbol = symbols[i];
+
+    if(symbol.size() > 0 && symbol[0] != '\'' && symbol[symbol.size()-1] != '\'') {
+      symbol = ('\'' + symbol + '\'');
+    }
     out_stream << symbol;
 
     if(i < symbols.size() - 1) {
@@ -273,7 +266,7 @@ int main(int argc, char **argv) {
     exit(0);
   }
 
-  Grammar grammar(G4);
+  Grammar grammar(G2);
   grammar.add_augmented_production();
 
   LR1ParserTableGenerator generator(grammar);
