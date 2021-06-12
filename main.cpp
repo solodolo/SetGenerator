@@ -67,7 +67,7 @@ const static std::vector<std::string> G2 {
   {"content -> content blocks"},
   {"content -> blocks"},
   {"blocks -> block"},
-  
+
   {"blocks -> print_block"},
   {"blocks -> if_statement_block"},
   {"blocks -> for_block"},
@@ -91,11 +91,11 @@ const static std::vector<std::string> G2 {
 
   {"statement -> expression"},
   {"statement -> func_call"},
-  {"var_name -> 'ID' '.' var_name"},
+  {"var_name -> var_name '.' 'ID'"},
   {"var_name -> 'ID'"},
 
   {"func_call -> 'ID' '(' args ')'"},
-  
+
   {"args -> arg_list"},
   {"args -> ~"},
 
@@ -136,7 +136,7 @@ const static std::vector<std::string> G3 {
 void print_first_sets(std::unordered_map<std::string, std::unordered_set<std::string>> first_sets) {
   for(const auto& a : first_sets) {
     std::cout << a.first << " : " << "[";
-    
+
     std::string set_str = "";
     std::vector<std::string> first_set(a.second.begin(), a.second.end());
     sort(first_set.begin(), first_set.end());
